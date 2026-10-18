@@ -21,9 +21,14 @@ WORKDIR /var/www/html
 
 COPY composer.json composer.lock ./
 
-RUN composer install --no-dev --prefer-dist --optimize-autoloader
-
 COPY . .
+
+RUN composer install \
+    --no-dev \
+    --prefer-dist \
+    --no-interaction \
+    --no-progress \
+    --optimize-autoloader
 
 RUN mkdir -p storage/framework/cache \
     storage/framework/sessions \
