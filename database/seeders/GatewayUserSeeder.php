@@ -14,7 +14,7 @@ class GatewayUserSeeder extends Seeder
             ['email' => 'admin@library.test'],
             [
                 'name' => 'Library Admin',
-                'password' => Hash::make('@dm!N'),
+                'password' => Hash::make('admin'),
                 'role' => 'ADMIN',
             ]
         );
@@ -23,7 +23,7 @@ class GatewayUserSeeder extends Seeder
             ['email' => 'librarian@library.test'],
             [
                 'name' => 'Library Librarian',
-                'password' => Hash::make('L!bR4rIan'),
+                'password' => Hash::make('librarian'),
                 'role' => 'LIBRARIAN',
             ]
         );

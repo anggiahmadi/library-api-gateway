@@ -10,6 +10,24 @@ use Illuminate\Http\Response;
 
 class LibraryProxyController extends Controller
 {
+    public function author(Request $request, int $id)
+    {
+        return $this->forward(
+            $request,
+            config('services.book.url'),
+            '/api/authors/'.$id
+        );
+    }
+
+    public function authors(Request $request)
+    {
+        return $this->forward(
+            $request,
+            config('services.book.url'),
+            '/api/authors'
+        );
+    }
+
     public function books(Request $request)
     {
         return $this->forward(
@@ -86,7 +104,8 @@ class LibraryProxyController extends Controller
 
             $http = Http::acceptJson()
                 ->connectTimeout(2)
-                ->timeout(10);
+                ->timeout(10)
+                ->retry(3);
 
             $options = [];
 
