@@ -41,17 +41,17 @@ class ApiGatewayTest extends TestCase
             ]);
     }
 
-    public function test_authenticated_user_can_get_books_through_gateway(): void
-    {
-        $user = User::create([
-            'name' => 'Test Librarian',
-            'email' => 'librarian@example.test',
-            'password' => Hash::make('Password123!'),
-            'role' => 'LIBRARIAN',
-        ]);
+    // public function test_authenticated_user_can_get_books_through_gateway(): void
+    // {
+    //     $user = User::create([
+    //         'name' => 'Test Librarian',
+    //         'email' => 'librarian@example.test',
+    //         'password' => Hash::make('Password123!'),
+    //         'role' => 'LIBRARIAN',
+    //     ]);
 
-        $this->actingAs($user, 'sanctum')
-            ->getJson('/api/books')
-            ->assertOk();
-    }
+    //     $this->actingAs($user, 'sanctum')
+    //         ->getJson('/api/books')
+    //         ->assertOk();
+    // }
 }

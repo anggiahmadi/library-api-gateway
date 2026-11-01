@@ -7,9 +7,18 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 
 class LibraryProxyController extends Controller
 {
+    private $start, $correlationId;
+
+    public function __construct()
+    {
+        $this->start = $start = microtime(true);
+    }
+
+
     public function author(Request $request, int $id)
     {
         return $this->forward(
@@ -100,12 +109,16 @@ class LibraryProxyController extends Controller
     private function forward(Request $request, string $baseUrl, string $path)
     {
         try {
+            $this->correlationId = $request->header('X-Requested-ID');
+
             $url = rtrim($baseUrl, '/') . $path;
 
             $http = Http::acceptJson()
                 ->connectTimeout(2)
                 ->timeout(10)
-                ->retry(3);
+                ->withHeaders([
+                    'X-Requested-ID' => $this->correlationId
+                ]);
 
             $options = [];
 
@@ -124,6 +137,16 @@ class LibraryProxyController extends Controller
                     'message' => 'HTTP method belum didukung.',
                 ], Response::HTTP_METHOD_NOT_ALLOWED);
             }
+
+            $duration = (microtime(true) - $this->start) * 1000;
+
+            $logData = [
+                'uuid' => $this->correlationId,
+                'end_point' => 'api/books',
+                'span' => $duration
+            ];
+
+            Log::info($logData);
 
             return response(
                 $response->body(),

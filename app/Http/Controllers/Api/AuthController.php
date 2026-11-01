@@ -28,6 +28,7 @@ class AuthController extends Controller
         $token = $user->createToken('library-client')->plainTextToken;
 
         return response()->json([
+            'uuid' => \Illuminate\Support\Str::uuid(),
             'token' => $token,
             'token_type' => 'Bearer',
             'user' => [
