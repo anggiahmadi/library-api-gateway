@@ -13,7 +13,9 @@ class UserController extends Controller
     public function index(): JsonResponse
     {
         return response()->json([
-            'data' => User::orderBy('name')->get(),
+            'data' => User::query()
+                ->orderBy('name')
+                ->get(['id', 'name', 'email', 'role', 'is_active', 'created_at']),
         ]);
     }
 

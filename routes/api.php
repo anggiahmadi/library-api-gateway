@@ -10,9 +10,10 @@ Route::post('/login', [AuthController::class, 'login']);
 
 // Publik (tanpa token)
 Route::get('/authors', [LibraryProxyController::class, 'authors']);
-Route::get('/authors/{id}', [LibraryProxyController::class, 'author']);
+Route::get('/authors/{id}', [LibraryProxyController::class, 'authors']);
 Route::get('/books', [LibraryProxyController::class, 'books']);
-Route::get('/books/{id}', [LibraryProxyController::class, 'book']);
+Route::get('/books/{id}', [LibraryProxyController::class, 'books']);
+Route::get('/books/{id}/copies', [LibraryProxyController::class, 'bookCopies']);
 
 Route::get('/sample_1', function (Request $request) {
     echo "sample";
@@ -32,10 +33,19 @@ Route::middleware('auth:sanctum')->group(function () {
     // LIBRARIAN
     Route::middleware('role:LIBRARIAN')->group(function () {
         Route::post('/books', [LibraryProxyController::class, 'books']);
+        Route::put('/books/{id}', [LibraryProxyController::class, 'books']);
+        Route::post('/books/{id}/copies', [LibraryProxyController::class, 'bookCopies']);
+        Route::put('/book-copies/{id}', [LibraryProxyController::class, 'bookCopy']);
+        Route::delete('/book-copies/{id}', [LibraryProxyController::class, 'bookCopy']);
         Route::post('/authors', [LibraryProxyController::class, 'authors']);
+        Route::put('/authors/{id}', [LibraryProxyController::class, 'authors']);
+        Route::delete('/authors/{id}', [LibraryProxyController::class, 'authors']);
         Route::get('/members', [LibraryProxyController::class, 'members']);
         Route::post('/members', [LibraryProxyController::class, 'members']);
+        Route::patch('/members/{id}', [LibraryProxyController::class, 'members']);
         Route::post('/lendings', [LibraryProxyController::class, 'lendings']);
+        Route::post('/lendings/{id}/return', [LibraryProxyController::class, 'returnLending']);
+        Route::post('/lendings/{id}/report-lost', [LibraryProxyController::class, 'reportLostLending']);
     });
 
     // ADMIN

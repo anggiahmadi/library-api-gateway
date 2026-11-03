@@ -19,7 +19,11 @@ class AuthController extends Controller
 
         $user = User::where('email', $credentials['email'])->first();
 
-        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+        if (
+            ! $user ||
+            ! $user->is_active ||
+            ! Hash::check($credentials['password'], $user->password)
+        ) {
             throw ValidationException::withMessages([
                 'email' => ['Email atau password tidak valid.'],
             ]);
@@ -36,6 +40,7 @@ class AuthController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role,
+                'is_active' => $user->is_active,
             ],
         ]);
     }
@@ -49,6 +54,7 @@ class AuthController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role,
+            'is_active' => $user->is_active,
         ]);
     }
 
