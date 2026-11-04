@@ -9,50 +9,91 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class LibraryProxyController extends Controller
 {
-    public function author(Request $request, int $id)
+    private $start, $correlationId;
+
+    public function __construct()
     {
-        return $this->forward(
-            $request,
-            config('services.book.url'),
-            '/api/authors/'.$id
-        );
+        $this->start = $start = microtime(true);
     }
 
     public function authors(Request $request)
     {
+        $id = $request->route('id');
+
         return $this->forward(
             $request,
             config('services.book.url'),
-            '/api/authors'
+            $id ? '/api/authors/'.$id : '/api/authors'
         );
     }
 
     public function books(Request $request)
     {
+        $id = $request->route('id');
+
         return $this->forward(
             $request,
             config('services.book.url'),
-            '/api/books'
+            $id ? '/api/books/'.$id : '/api/books'
+        );
+    }
+
+    public function bookCopies(Request $request, int $id)
+    {
+        return $this->forward(
+            $request,
+            config('services.book.url'),
+            '/api/books/'.$id.'/copies'
+        );
+    }
+
+    public function bookCopy(Request $request, int $id)
+    {
+        return $this->forward(
+            $request,
+            config('services.book.url'),
+            '/api/book-copies/'.$id
         );
     }
 
     public function members(Request $request)
     {
+        $id = $request->route('id');
+
         if (! $request->isMethod('POST')) {
+            if ($request->isMethod('PATCH') && $id) {
+                return $this->updateMember($request, (int) $id);
+            }
+
             return $this->forward(
                 $request,
                 config('services.member.url'),
-                '/api/members'
+                $id ? '/api/members/'.$id : '/api/members'
             );
         }
 
         try {
+            DB::beginTransaction();
+
+            User::firstOrCreate(
+                ['email' => $request->input('email')],
+                [
+                    'name' => $request->input('name') ?? $request->input('email'),
+                    'password' => (string) ($request->input('member_number') ?? Str::random(12)),
+                    'role' => 'MEMBER',
+                    'is_active' => true,
+                ]
+            );
+
+            $request->merge(['user_id' => User::where('email', $request->input('email'))->value('id')]);
+
             $response = Http::acceptJson()
                 ->connectTimeout(2)
                 ->timeout(10)
@@ -61,6 +102,7 @@ class LibraryProxyController extends Controller
                     $request->all()
                 );
         } catch (ConnectionException $e) {
+            DB::rollBack();
             return response()->json([
                 'message' => 'Member Service tidak dapat dihubungi.',
             ], 503);
@@ -68,7 +110,83 @@ class LibraryProxyController extends Controller
 
         // Akun login hanya dibuat setelah Member Service mengonfirmasi berhasil
         if ($response->status() === 201) {
+            DB::commit();
+
             $this->createMemberAccount($response->json('data') ?? $response->json());
+        }
+
+        DB::rollBack();
+
+        return response(
+            $response->body(),
+            $response->status()
+        )->header(
+            'Content-Type',
+            $response->header('Content-Type', 'application/json')
+        );
+    }
+
+    private function updateMember(Request $request, int $id)
+    {
+        $baseUrl = rtrim(config('services.member.url'), '/');
+
+        try {
+            $memberResponse = Http::acceptJson()
+                ->connectTimeout(2)
+                ->timeout(10)
+                ->get($baseUrl.'/api/members/'.$id);
+        } catch (ConnectionException $e) {
+            return response()->json([
+                'message' => 'Member Service tidak dapat dihubungi.',
+            ], Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        if (! $memberResponse->successful()) {
+            return response(
+                $memberResponse->body(),
+                $memberResponse->status()
+            )->header(
+                'Content-Type',
+                $memberResponse->header('Content-Type', 'application/json')
+            );
+        }
+
+        $member = $memberResponse->json();
+        $user = isset($member['user_id'])
+            ? User::find($member['user_id'])
+            : User::where('email', $member['email'] ?? null)->first();
+
+        if (
+            $user &&
+            $request->filled('email') &&
+            User::where('email', $request->input('email'))
+                ->where('id', '!=', $user->id)
+                ->exists()
+        ) {
+            return response()->json([
+                'message' => 'Email sudah digunakan oleh akun lain.',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        try {
+            $response = Http::acceptJson()
+                ->connectTimeout(2)
+                ->timeout(10)
+                ->patch($baseUrl.'/api/members/'.$id, $request->only([
+                    'name',
+                    'email',
+                ]));
+        } catch (ConnectionException $e) {
+            return response()->json([
+                'message' => 'Member Service tidak dapat dihubungi.',
+            ], Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        if ($response->successful() && $user) {
+            $user->update([
+                'name' => $request->input('name', $user->name),
+                'email' => $request->input('email', $user->email),
+            ]);
         }
 
         return response(
@@ -140,6 +258,24 @@ class LibraryProxyController extends Controller
         }
     }
 
+    public function returnLending(Request $request, int $id)
+    {
+        return $this->forward(
+            $request,
+            config('services.member.url'),
+            '/api/lendings/'.$id.'/return'
+        );
+    }
+
+    public function reportLostLending(Request $request, int $id)
+    {
+        return $this->forward(
+            $request,
+            config('services.member.url'),
+            '/api/lendings/'.$id.'/report-lost'
+        );
+    }
+
     /**
      * Cari id anggota di Member Service berdasarkan email akun login.
      * Gateway tidak menyentuh database Member Service, hanya lewat HTTP.
@@ -175,6 +311,8 @@ class LibraryProxyController extends Controller
         ?array $query = null
     ) {
         try {
+            $this->correlationId = $request->header('X-Requested-ID');
+
             $url = rtrim($baseUrl, '/') . $path;
 
             if ($request->isMethod('GET')) {
@@ -195,11 +333,36 @@ class LibraryProxyController extends Controller
                     ->connectTimeout(2)
                     ->timeout(10)
                     ->post($url, $request->all());
+            } elseif ($request->isMethod('PUT')) {
+                $response = Http::acceptJson()
+                    ->connectTimeout(2)
+                    ->timeout(10)
+                    ->put($url, $request->all());
+            } elseif ($request->isMethod('PATCH')) {
+                $response = Http::acceptJson()
+                    ->connectTimeout(2)
+                    ->timeout(10)
+                    ->patch($url, $request->all());
+            } elseif ($request->isMethod('DELETE')) {
+                $response = Http::acceptJson()
+                    ->connectTimeout(2)
+                    ->timeout(10)
+                    ->delete($url);
             } else {
                 return response()->json([
                     'message' => 'HTTP method belum didukung.',
                 ], Response::HTTP_METHOD_NOT_ALLOWED);
             }
+
+            $duration = (microtime(true) - $this->start) * 1000;
+
+            $logData = [
+                'uuid' => $this->correlationId,
+                'end_point' => 'api/books',
+                'span' => $duration
+            ];
+
+            Log::info($logData);
 
             return response(
                 $response->body(),

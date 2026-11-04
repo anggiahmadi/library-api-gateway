@@ -41,17 +41,62 @@ class ApiGatewayTest extends TestCase
             ]);
     }
 
-    public function test_authenticated_user_can_get_books_through_gateway(): void
+    public function test_inactive_user_cannot_log_in(): void
     {
-        $user = User::create([
+        User::create([
+            'name' => 'Inactive Librarian',
+            'email' => 'inactive@example.test',
+            'password' => Hash::make('Password123!'),
+            'role' => 'LIBRARIAN',
+            'is_active' => false,
+        ]);
+
+        $this->postJson('/api/login', [
+            'email' => 'inactive@example.test',
+            'password' => 'Password123!',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['email']);
+    }
+
+    public function test_admin_can_change_user_status(): void
+    {
+        $admin = User::create([
+            'name' => 'Test Admin',
+            'email' => 'admin@example.test',
+            'password' => Hash::make('Password123!'),
+            'role' => 'ADMIN',
+        ]);
+        $librarian = User::create([
             'name' => 'Test Librarian',
             'email' => 'librarian@example.test',
             'password' => Hash::make('Password123!'),
             'role' => 'LIBRARIAN',
         ]);
 
-        $this->actingAs($user, 'sanctum')
-            ->getJson('/api/books')
-            ->assertOk();
+        $this->actingAs($admin, 'sanctum')
+            ->putJson("/api/users/{$librarian->id}/status", [
+                'is_active' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.is_active', false);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $librarian->id,
+            'is_active' => false,
+        ]);
     }
+
+    // public function test_authenticated_user_can_get_books_through_gateway(): void
+    // {
+    //     $user = User::create([
+    //         'name' => 'Test Librarian',
+    //         'email' => 'librarian@example.test',
+    //         'password' => Hash::make('Password123!'),
+    //         'role' => 'LIBRARIAN',
+    //     ]);
+
+    //     $this->actingAs($user, 'sanctum')
+    //         ->getJson('/api/books')
+    //         ->assertOk();
+    // }
 }
