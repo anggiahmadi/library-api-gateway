@@ -31,6 +31,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // LIBRARIAN
     Route::middleware('role:LIBRARIAN')->group(function () {
         Route::post('/books', [LibraryProxyController::class, 'books']);
+        Route::get(
+            '/books/{id}/copies',
+            [LibraryProxyController::class, 'bookCopies']
+        );
         Route::post('/authors', [LibraryProxyController::class, 'authors']);
         Route::get('/members', [LibraryProxyController::class, 'members']);
         Route::post('/members', [LibraryProxyController::class, 'members']);
