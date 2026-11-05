@@ -26,4 +26,4 @@ jobs:
             composer install
 
             echo "Running tests"
-            php artisan test --env=testing
+            php artisan test
